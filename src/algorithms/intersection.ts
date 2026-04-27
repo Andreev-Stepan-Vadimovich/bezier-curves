@@ -254,6 +254,178 @@ export function intersectSegment2Arc(segment: g.Segment, arc: g.Arc): g.Point[] 
   return ip
 }
 
+export function intersectSegment2Quadratic(segment: g.Segment, quad: g.Quadratic): g.Point[] {
+  let ip = []
+
+  // Quick reject: check bounding boxes
+  if (!segment.box.intersect(quad.box)) {
+    return ip
+  }
+
+  // Special case: zero-length segment
+  if (segment.isZeroLength()) {
+    if (quad.contains(segment.start)) {
+      ip.push(segment.start)
+    }
+    return ip
+  }
+
+  // Special case: degenerate quadratic curve
+  if (quad.isZeroLength()) {
+    if (segment.contains(quad.start)) {
+      ip.push(quad.start)
+    }
+    return ip
+  }
+
+  // Check if segment intersects convex hull of the quadratic curve
+  // Convex hull is a triangle formed by start, control1, and end points
+  const convexHull = new g.Polygon([quad.start, quad.control1, quad.end])
+  
+  // If segment doesn't intersect convex hull, it can't intersect the curve
+  if (!segmentIntersectsOrInsidePolygon(segment, convexHull)) {
+    return ip
+  }
+
+  // Segment intersects convex hull, check intersection with the curve itself
+  // Use segmented approximation of the curve
+  const segments = quad.segments
+  
+  for (let curveSegment of segments) {
+    const ips_tmp = intersectSegment2Segment(segment, curveSegment)
+    for (let pt of ips_tmp) {
+      // Avoid duplicates
+      if (!ptInIntPoints(pt, ip)) {
+        ip.push(pt)
+      }
+    }
+  }
+
+  return ip
+}
+
+export function intersectArc2Quadratic(arc: g.Arc, quad: g.Quadratic): g.Point[] {
+  let ip = []
+
+  // Quick reject: check bounding boxes
+  if (!arc.box.intersect(quad.box)) {
+    return ip
+  }
+
+  // Special case: degenerate quadratic curve
+  if (quad.isZeroLength()) {
+    if (arc.contains(quad.start)) {
+      ip.push(quad.start)
+    }
+    return ip
+  }
+
+  // Check if arc intersects convex hull of the quadratic curve
+  // Convex hull is a triangle formed by start, control1, and end points
+  const convexHull = new g.Polygon([quad.start, quad.control1, quad.end])
+  
+  // If arc doesn't intersect convex hull, it can't intersect the curve
+  if (!arcIntersectsOrInsidePolygon(arc, convexHull)) {
+    return ip
+  }
+
+  // Arc intersects convex hull, check intersection with the curve itself
+  // Use segmented approximation of the curve
+  const segments = quad.segments
+  
+  for (let curveSegment of segments) {
+    const ips_tmp = intersectSegment2Arc(curveSegment, arc)
+    for (let pt of ips_tmp) {
+      // Avoid duplicates
+      if (!ptInIntPoints(pt, ip)) {
+        ip.push(pt)
+      }
+    }
+  }
+
+  return ip
+}
+
+export function intersectQuadratic2Quadratic(quad1: g.Quadratic, quad2: g.Quadratic): g.Point[] {
+  let ip = []
+
+  // Quick reject: check bounding boxes
+  if (!quad1.box.intersect(quad2.box)) {
+    return ip
+  }
+
+  // Special case: degenerate quadratic curves
+  if (quad1.isZeroLength()) {
+    if (quad2.contains(quad1.start)) {
+      ip.push(quad1.start)
+    }
+    return ip
+  }
+
+  if (quad2.isZeroLength()) {
+    if (quad1.contains(quad2.start)) {
+      ip.push(quad2.start)
+    }
+    return ip
+  }
+
+  // Check if quad1 intersects convex hull of quad2
+  const convexHull2 = new g.Polygon([quad2.start, quad2.control1, quad2.end])
+  
+  // Use segmented approximation of both curves
+  const segments1 = quad1.segments
+  const segments2 = quad2.segments
+  
+  for (let seg1 of segments1) {
+    for (let seg2 of segments2) {
+      const ips_tmp = intersectSegment2Segment(seg1, seg2)
+      for (let pt of ips_tmp) {
+        // Avoid duplicates
+        if (!ptInIntPoints(pt, ip)) {
+          ip.push(pt)
+        }
+      }
+    }
+  }
+
+  return ip
+}
+
+/**
+ * Helper function to check if arc intersects or is inside polygon
+ */
+function arcIntersectsOrInsidePolygon(arc: g.Arc, polygon: g.Polygon): boolean {
+  // Check if arc intersects polygon edges
+  const intersections = intersectArc2Polygon(arc, polygon)
+  if (intersections.length > 0) {
+    return true
+  }
+
+  // Check if arc is completely inside polygon
+  // If start point is inside, check if the whole arc is inside
+  if (polygon.contains(arc.start)) {
+    // Also check middle point to be sure the arc doesn't go outside
+    return polygon.contains(arc.middle())
+  }
+
+  return false
+}
+
+/**
+ * Helper function to check if segment intersects or is inside polygon
+ */
+function segmentIntersectsOrInsidePolygon(segment: g.Segment, polygon: g.Polygon): boolean {
+  // Check if segment intersects polygon edges
+  const intersections = intersectSegment2Polygon(segment, polygon)
+  if (intersections.length > 0) {
+    return true
+  }
+
+  // Check if segment is completely inside polygon
+  // If start point is inside, the whole segment is inside (since no intersections)
+  return polygon.contains(segment.start)
+}
+
 export function intersectSegment2Box(segment: g.Segment, box: g.Box): g.Point[] {
   let ips = []
   for (let seg of box.toSegments()) {
@@ -436,6 +608,17 @@ export function intersectEdge2Arc(edge: g.Edge, arc: g.Arc): g.Point[] {
   throw new Error('unimplemented')
 }
 
+export function instersectEdge2Quadratic(edge: g.Edge, quad: g.Quadratic): g.Point[] {
+  if (edge.isSegment()) {
+    return intersectSegment2Quadratic(edge.shape, quad)
+  } else if (edge.isArc()) {
+    return intersectArc2Quadratic(edge.shape, quad)
+  } else if (edge.isQuadratic()) {
+    return intersectQuadratic2Quadratic(edge.shape, quad)
+  }
+  throw new Error('unimplemented')
+}
+
 export function intersectEdge2Line(edge: g.Edge, line: g.Line): g.Point[] {
   if (edge.isSegment())
     return intersectSegment2Line(edge.shape, line)
@@ -513,6 +696,7 @@ export function intersectCircle2Polygon(circle: g.Circle, polygon: g.Polygon): g
 export function intersectEdge2Edge(edge1: g.Edge, edge2: g.Edge): g.Point[] {
   if (edge1.isSegment()) { return intersectEdge2Segment(edge2, edge1.shape) }
   if (edge1.isArc()) { return intersectEdge2Arc(edge2, edge1.shape) }
+  if (edge1.isQuadratic()) { return instersectEdge2Quadratic(edge2, edge1.shape) }
   throw new Error('unimplemented')
 }
 

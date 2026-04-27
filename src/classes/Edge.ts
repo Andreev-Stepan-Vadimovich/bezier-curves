@@ -76,6 +76,14 @@ export class Edge<T extends EdgeShape = EdgeShape> {
     return this.shape instanceof Arc
   }
 
+  isQuadratic(): this is Edge<Quadratic> {
+    return this.shape instanceof Quadratic
+  }
+
+  isBezier(): this is Edge<Bezier> {
+    return this.shape instanceof Bezier
+  }
+
   /** Get middle point of the edge */
   middle() {
     return this.shape.middle()

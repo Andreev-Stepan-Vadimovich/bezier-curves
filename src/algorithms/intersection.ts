@@ -391,6 +391,183 @@ export function intersectQuadratic2Quadratic(quad1: g.Quadratic, quad2: g.Quadra
   return ip
 }
 
+export function intersectSegment2Bezier(segment: g.Segment, bezier: g.Bezier): g.Point[] {
+  let ip = []
+
+  // Quick reject: check bounding boxes
+  if (!segment.box.intersect(bezier.box)) {
+    return ip
+  }
+
+  // Special case: zero-length segment
+  if (segment.isZeroLength()) {
+    if (bezier.contains(segment.start)) {
+      ip.push(segment.start)
+    }
+    return ip
+  }
+
+  // Special case: degenerate bezier curve
+  if (bezier.isZeroLength()) {
+    if (segment.contains(bezier.start)) {
+      ip.push(bezier.start)
+    }
+    return ip
+  }
+
+  // Check if segment intersects convex hull of the bezier curve
+  // Convex hull is a quadrilateral formed by start, control1, control2, and end points
+  const convexHull = new g.Polygon([bezier.start, bezier.control1, bezier.control2, bezier.end])
+  
+  // If segment doesn't intersect convex hull, it can't intersect the curve
+  if (!segmentIntersectsOrInsidePolygon(segment, convexHull)) {
+    return ip
+  }
+
+  // Segment intersects convex hull, check intersection with the curve itself
+  // Use segmented approximation of the curve
+  const segments = bezier.segments
+  
+  for (let curveSegment of segments) {
+    const ips_tmp = intersectSegment2Segment(segment, curveSegment)
+    for (let pt of ips_tmp) {
+      // Avoid duplicates
+      if (!ptInIntPoints(pt, ip)) {
+        ip.push(pt)
+      }
+    }
+  }
+
+  return ip
+}
+
+export function intersectArc2Bezier(arc: g.Arc, bezier: g.Bezier): g.Point[] {
+  let ip = []
+
+  // Quick reject: check bounding boxes
+  if (!arc.box.intersect(bezier.box)) {
+    return ip
+  }
+
+  // Special case: degenerate bezier curve
+  if (bezier.isZeroLength()) {
+    if (arc.contains(bezier.start)) {
+      ip.push(bezier.start)
+    }
+    return ip
+  }
+
+  // Check if arc intersects convex hull of the bezier curve
+  // Convex hull is a quadrilateral formed by start, control1, control2, and end points
+  const convexHull = new g.Polygon([bezier.start, bezier.control1, bezier.control2, bezier.end])
+  
+  // If arc doesn't intersect convex hull, it can't intersect the curve
+  if (!arcIntersectsOrInsidePolygon(arc, convexHull)) {
+    return ip
+  }
+
+  // Arc intersects convex hull, check intersection with the curve itself
+  // Use segmented approximation of the curve
+  const segments = bezier.segments
+  
+  for (let curveSegment of segments) {
+    const ips_tmp = intersectSegment2Arc(curveSegment, arc)
+    for (let pt of ips_tmp) {
+      // Avoid duplicates
+      if (!ptInIntPoints(pt, ip)) {
+        ip.push(pt)
+      }
+    }
+  }
+
+  return ip
+}
+
+export function intersectQuadratic2Bezier(quad: g.Quadratic, bezier: g.Bezier): g.Point[] {
+  let ip = []
+
+  // Quick reject: check bounding boxes
+  if (!quad.box.intersect(bezier.box)) {
+    return ip
+  }
+
+  // Special case: degenerate quadratic curve
+  if (quad.isZeroLength()) {
+    if (bezier.contains(quad.start)) {
+      ip.push(quad.start)
+    }
+    return ip
+  }
+
+  // Special case: degenerate bezier curve
+  if (bezier.isZeroLength()) {
+    if (quad.contains(bezier.start)) {
+      ip.push(bezier.start)
+    }
+    return ip
+  }
+
+  // Use segmented approximation of both curves
+  const quadSegments = quad.segments
+  const bezierSegments = bezier.segments
+  
+  for (let quadSeg of quadSegments) {
+    for (let bezierSeg of bezierSegments) {
+      const ips_tmp = intersectSegment2Segment(quadSeg, bezierSeg)
+      for (let pt of ips_tmp) {
+        // Avoid duplicates
+        if (!ptInIntPoints(pt, ip)) {
+          ip.push(pt)
+        }
+      }
+    }
+  }
+
+  return ip
+}
+
+export function intersectBezier2Bezier(bezier1: g.Bezier, bezier2: g.Bezier): g.Point[] {
+  let ip = []
+
+  // Quick reject: check bounding boxes
+  if (!bezier1.box.intersect(bezier2.box)) {
+    return ip
+  }
+
+  // Special case: degenerate bezier curves
+  if (bezier1.isZeroLength()) {
+    if (bezier2.contains(bezier1.start)) {
+      ip.push(bezier1.start)
+    }
+    return ip
+  }
+
+  if (bezier2.isZeroLength()) {
+    if (bezier1.contains(bezier2.start)) {
+      ip.push(bezier2.start)
+    }
+    return ip
+  }
+
+  // Use segmented approximation of both curves
+  const segments1 = bezier1.segments
+  const segments2 = bezier2.segments
+  
+  for (let seg1 of segments1) {
+    for (let seg2 of segments2) {
+      const ips_tmp = intersectSegment2Segment(seg1, seg2)
+      for (let pt of ips_tmp) {
+        // Avoid duplicates
+        if (!ptInIntPoints(pt, ip)) {
+          ip.push(pt)
+        }
+      }
+    }
+  }
+
+  return ip
+}
+
 /**
  * Helper function to check if arc intersects or is inside polygon
  */
@@ -597,6 +774,10 @@ export function intersectEdge2Segment(edge: g.Edge, segment: g.Segment): g.Point
     return intersectSegment2Segment(edge.shape, segment)
   if (edge.isArc())
     return intersectSegment2Arc(segment, edge.shape)
+  if (edge.isQuadratic()) 
+    return intersectSegment2Quadratic(segment, edge.shape)
+  if (edge.isBezier()) 
+    return intersectSegment2Bezier(segment, edge.shape)
   throw new Error('unimplemented')
 }
 
@@ -605,6 +786,10 @@ export function intersectEdge2Arc(edge: g.Edge, arc: g.Arc): g.Point[] {
     return intersectSegment2Arc(edge.shape, arc)
   if (edge.isArc())
     return intersectArc2Arc(edge.shape, arc)
+  if (edge.isQuadratic()) 
+    return intersectArc2Quadratic(arc, edge.shape)
+  if (edge.isBezier()) 
+    return intersectArc2Bezier(arc, edge.shape)
   throw new Error('unimplemented')
 }
 
@@ -613,8 +798,23 @@ export function instersectEdge2Quadratic(edge: g.Edge, quad: g.Quadratic): g.Poi
     return intersectSegment2Quadratic(edge.shape, quad)
   } else if (edge.isArc()) {
     return intersectArc2Quadratic(edge.shape, quad)
+  } else if (edge.isBezier()) {
+    return intersectQuadratic2Bezier(quad, edge.shape)
   } else if (edge.isQuadratic()) {
     return intersectQuadratic2Quadratic(edge.shape, quad)
+  }
+  throw new Error('unimplemented')
+}
+
+export function intersectEdge2Bezier(edge: g.Edge, bezier: g.Bezier): g.Point[] {
+  if (edge.isSegment()) {
+    return intersectSegment2Bezier(edge.shape, bezier)
+  } else if (edge.isArc()) {
+    return intersectArc2Bezier(edge.shape, bezier)
+  } else if (edge.isQuadratic()) {
+    return intersectQuadratic2Bezier(edge.shape, bezier)
+  } else if (edge.isBezier()) {
+    return intersectBezier2Bezier(edge.shape, bezier)
   }
   throw new Error('unimplemented')
 }
@@ -697,6 +897,7 @@ export function intersectEdge2Edge(edge1: g.Edge, edge2: g.Edge): g.Point[] {
   if (edge1.isSegment()) { return intersectEdge2Segment(edge2, edge1.shape) }
   if (edge1.isArc()) { return intersectEdge2Arc(edge2, edge1.shape) }
   if (edge1.isQuadratic()) { return instersectEdge2Quadratic(edge2, edge1.shape) }
+  if (edge1.isBezier()) { return intersectEdge2Bezier(edge2, edge1.shape) }
   throw new Error('unimplemented')
 }
 

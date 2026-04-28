@@ -173,6 +173,14 @@ export class Segment extends Shape<Segment> {
       return Intersection.intersectSegment2Polygon(this, shape)
     }
 
+    if (shape instanceof geom.Bezier) {
+      return Intersection.intersectSegment2Bezier(this, shape)
+    }
+
+    if (shape instanceof geom.Quadratic) {
+      return Intersection.intersectSegment2Quadratic(this, shape)
+    }
+
     throw new Error('unreachable')
   }
 

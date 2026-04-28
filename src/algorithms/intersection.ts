@@ -859,6 +859,30 @@ export function intersectArc2Polygon(arc: g.Arc, polygon: g.Polygon): g.Point[] 
   return ip
 }
 
+export function intersectQuadratic2Polygon(quad: g.Quadratic, polygon: g.Polygon): g.Point[] {
+  let ip = []
+
+  for (let edge of polygon.edges) {
+    for (let pt of instersectEdge2Quadratic(edge, quad)) {
+      ip.push(pt)
+    }
+  }
+
+  return ip
+}
+
+export function intersectBezier2Polygon(bezier: g.Bezier, polygon: g.Polygon): g.Point[] {
+  let ip = []
+
+  for (let edge of polygon.edges) {
+    for (let pt of intersectEdge2Bezier(edge, bezier)) {
+      ip.push(pt)
+    }
+  }
+
+  return ip
+}
+
 export function intersectLine2Polygon(line: g.Line, polygon: g.Polygon): g.Point[] {
   let ip = []
 
@@ -1003,4 +1027,38 @@ export function intersectRay2Ray(ray1: g.Ray, ray2: g.Ray): g.Point[] {
 
 export function intersectRay2Polygon(ray: g.Ray, polygon: g.Polygon): g.Point[] {
   return intersectLine2Polygon(createLineFromRay(ray), polygon).filter((pt) => ray.contains(pt))
+}
+
+export function intersectRay2Quadratic(ray: g.Ray, quadratic: g.Quadratic): g.Point[] {
+  // Find intersections with all segments of the quadratic curve
+  let ip: g.Point[] = []
+  
+  for (let segment of quadratic.segments) {
+    let segment_ips = intersectRay2Segment(ray, segment)
+    for (let pt of segment_ips) {
+      // Check if point is not already in the list
+      if (!ptInIntPoints(pt, ip)) {
+        ip.push(pt)
+      }
+    }
+  }
+  
+  return ip
+}
+
+export function intersectRay2Bezier(ray: g.Ray, bezier: g.Bezier): g.Point[] {
+  // Find intersections with all segments of the bezier curve
+  let ip: g.Point[] = []
+  
+  for (let segment of bezier.segments) {
+    let segment_ips = intersectRay2Segment(ray, segment)
+    for (let pt of segment_ips) {
+      // Check if point is not already in the list
+      if (!ptInIntPoints(pt, ip)) {
+        ip.push(pt)
+      }
+    }
+  }
+  
+  return ip
 }

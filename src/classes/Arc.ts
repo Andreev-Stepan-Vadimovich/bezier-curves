@@ -13,6 +13,8 @@ import { Segment } from './Segment'
 import { Polygon } from './Polygon'
 import { Vector } from './Vector'
 import { Shape, ShapeTag } from './Shape'
+import { Bezier } from './Bezier'
+import { Quadratic } from './Quadratic'
 
 /**
  * Class representing a circular arc
@@ -250,6 +252,8 @@ export class Arc extends Shape<Arc> {
     if (shape instanceof Box) { return Intersection.intersectArc2Box(this, shape) }
     if (shape instanceof Arc) { return Intersection.intersectArc2Arc(this, shape) }
     if (shape instanceof Polygon) { return Intersection.intersectArc2Polygon(this, shape) }
+    if (shape instanceof Bezier) { return Intersection.intersectArc2Bezier(this, shape) }
+    if (shape instanceof Quadratic) { return Intersection.intersectArc2Quadratic(this, shape) }
     throw new Error('unimplemented')
   }
 

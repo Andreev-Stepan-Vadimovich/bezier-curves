@@ -200,6 +200,14 @@ export class Point extends Shape<Point> {
       return Distance.point2polygon(this, shape)
     }
 
+    if (shape instanceof geom.Quadratic) {
+      return Distance.point2quadratic(this, shape)
+    }
+
+    if (shape instanceof geom.Bezier) {
+      return Distance.point2bezier(this, shape)
+    }
+
     throw new Error('unimplemented')
 
     // TODO: enable

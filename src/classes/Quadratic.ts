@@ -8,6 +8,8 @@ import * as Utils from '../utils/utils'
 import * as Intersection from '../algorithms/intersection'
 import * as Distance from '../algorithms/distance'
 import * as curves from './curves'
+import { Bezier } from './Bezier'
+import { Vector } from './Vector'
 
 const EMPTY = Object.freeze([]) as any[]
 
@@ -173,6 +175,20 @@ export class Quadratic extends Shape<Quadratic> {
     )
   }
 
+  tangentInStart(): Vector {
+    // Для квадратичной кривой Безье касательный вектор в начальной точке (t=0)
+    // равен производной: B'(0) = 2(control1 - start)
+    let vec = new Vector(this.start, this.control1)
+    return vec.normalize()
+  }
+
+  tangentInEnd(): Vector {
+    // Для квадратичной кривой Безье касательный вектор в конечной точке (t=1)
+    // равен производной: B'(1) = 2(end - control1)
+    let vec = new Vector(this.control1, this.end)
+    return vec.normalize()
+  }
+
   /**
    * Returns new curve with swapped start and end points
    */
@@ -185,8 +201,49 @@ export class Quadratic extends Shape<Quadratic> {
    * if point is inside segment. Returns clone of this segment if query point is incident
    * to start or end point of the segment. Returns empty array if point does not belong to segment
    */
-  split(_point: Point): (Quadratic | null)[] {
-    throw new Error('unimplemented')
+  split(point: Point): (Quadratic | null)[] {
+    // Проверяем, принадлежит ли точка кривой
+    if (!this.contains(point)) {
+      return []
+    }
+
+    // Если точка совпадает с начальной точкой
+    if (this.start.equalTo(point)) {
+      return [this.clone()]
+    }
+
+    // Если точка совпадает с конечной точкой
+    if (this.end.equalTo(point)) {
+      return [this.clone()]
+    }
+
+    // Находим параметр t для точки на кривой
+    // Используем LUT (lookup table) для поиска ближайшей точки
+    const lut = this.lut
+    let minDistance = Infinity
+    let bestIndex = -1
+
+    for (let i = 0; i < lut.length; i += 4) {
+      const x = lut[i + 0]
+      const y = lut[i + 1]
+      const dist = Math.hypot(x - point.x, y - point.y)
+      
+      if (dist < minDistance) {
+        minDistance = dist
+        bestIndex = i / 4
+      }
+    }
+
+    // Если не нашли близкую точку, возвращаем пустой массив
+    if (bestIndex === -1 || minDistance > Utils.getTolerance()) {
+      return []
+    }
+
+    // Получаем параметр t из LUT
+    const t = lut[bestIndex * 4 + 2]
+
+    // Используем существующий метод splitAtT для разделения кривой
+    return this.splitAtT(t)
   }
 
   splitAtLength(length: number): (Quadratic | null)[] {
@@ -300,6 +357,12 @@ function getSegmentIntersect(shape: Shape) {
   if (shape instanceof Arc) {
     return Intersection.intersectSegment2Arc
   }
+  if (shape instanceof Bezier) {
+    return Intersection.intersectSegment2Bezier
+  }
+  if (shape instanceof Quadratic) {
+    return Intersection.intersectSegment2Quadratic
+  }
   throw new Error('unimplemented')
 }
 
@@ -312,6 +375,12 @@ function getSegmentDistance(shape: Shape): (s: Segment, o: any) => [number, Segm
   }
   if (shape instanceof Arc) {
     return Distance.segment2arc
+  }
+  if (shape instanceof Quadratic) {
+    return Distance.segment2quadratic
+  }
+  if (shape instanceof Bezier) {
+    return Distance.segment2bezier
   }
   throw new Error('unimplemented')
 }

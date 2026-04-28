@@ -105,6 +105,86 @@ export function segment2point(segment: g.Segment, point: g.Point): [number, g.Se
 }
 
 /**
+ * Calculate distance and shortest segment between segment and quadratic
+ */
+export function segment2quadratic(segment: g.Segment, quadratic: g.Quadratic): [number, g.Segment] {
+  // Case 1: Segment and quadratic intersect - return zero distance
+  let ip = Intersection.intersectSegment2Quadratic(segment, quadratic)
+  if (ip.length > 0) {
+    return [0, new g.Segment(ip[0], ip[0])]
+  }
+
+  // Case 2: No intersection - find minimum distance
+  // Check distances from segment endpoints to quadratic and vice versa
+  let dist_and_segment: [number, g.Segment][] = []
+
+  // Distance from segment start to quadratic
+  let [dist_start, seg_start] = quadratic.distanceToPoint(segment.start)
+  dist_and_segment.push([dist_start, seg_start.reverse()])
+
+  // Distance from segment end to quadratic
+  let [dist_end, seg_end] = quadratic.distanceToPoint(segment.end)
+  dist_and_segment.push([dist_end, seg_end.reverse()])
+
+  // Distance from quadratic start to segment
+  dist_and_segment.push(point2segment(quadratic.start, segment))
+
+  // Distance from quadratic end to segment
+  dist_and_segment.push(point2segment(quadratic.end, segment))
+
+  // Check distances from sample points along the quadratic curve to segment
+  const sampleCount = 10
+  for (let i = 1; i < sampleCount; i++) {
+    const t = i / sampleCount
+    const point = quadratic.pointAtLength(quadratic.length * t)
+    dist_and_segment.push(point2segment(point, segment))
+  }
+
+  sort(dist_and_segment)
+  return dist_and_segment[0]
+}
+
+/**
+ * Calculate distance and shortest segment between segment and bezier
+ */
+export function segment2bezier(segment: g.Segment, bezier: g.Bezier): [number, g.Segment] {
+  // Case 1: Segment and bezier intersect - return zero distance
+  let ip = Intersection.intersectSegment2Bezier(segment, bezier)
+  if (ip.length > 0) {
+    return [0, new g.Segment(ip[0], ip[0])]
+  }
+
+  // Case 2: No intersection - find minimum distance
+  // Check distances from segment endpoints to bezier and vice versa
+  let dist_and_segment: [number, g.Segment][] = []
+
+  // Distance from segment start to bezier
+  let [dist_start, seg_start] = bezier.distanceToPoint(segment.start)
+  dist_and_segment.push([dist_start, seg_start.reverse()])
+
+  // Distance from segment end to bezier
+  let [dist_end, seg_end] = bezier.distanceToPoint(segment.end)
+  dist_and_segment.push([dist_end, seg_end.reverse()])
+
+  // Distance from bezier start to segment
+  dist_and_segment.push(point2segment(bezier.start, segment))
+
+  // Distance from bezier end to segment
+  dist_and_segment.push(point2segment(bezier.end, segment))
+
+  // Check distances from sample points along the bezier curve to segment
+  const sampleCount = 10
+  for (let i = 1; i < sampleCount; i++) {
+    const t = i / sampleCount
+    const point = bezier.pointAtLength(bezier.length * t)
+    dist_and_segment.push(point2segment(point, segment))
+  }
+
+  sort(dist_and_segment)
+  return dist_and_segment[0]
+}
+
+/**
  * Calculate distance and shortest segment between segment and line
  */
 export function segment2line(seg: g.Segment, line: g.Line): [number, g.Segment] {
@@ -436,6 +516,54 @@ export function point2polygon(point, polygon): [number, g.Segment] {
     }
   }
   return min_dist_and_segment
+}
+
+/**
+ * Calculate distance and shortest segment between point and quadratic
+ */
+export function point2quadratic(point: g.Point, quadratic: g.Quadratic): [number, g.Segment] {
+  // Check if point is on the quadratic curve
+  if (quadratic.contains(point)) {
+    return [0, new g.Segment(point, point)]
+  }
+
+  // Find minimum distance by checking distances to all segments of the quadratic
+  let min_dist = Number.POSITIVE_INFINITY
+  let closest_segment = new g.Segment(point, point)
+
+  for (let segment of quadratic.segments) {
+    let [dist, shortest_segment] = point2segment(point, segment)
+    if (dist < min_dist) {
+      min_dist = dist
+      closest_segment = shortest_segment
+    }
+  }
+
+  return [min_dist, closest_segment]
+}
+
+/**
+ * Calculate distance and shortest segment between point and bezier
+ */
+export function point2bezier(point: g.Point, bezier: g.Bezier): [number, g.Segment] {
+  // Check if point is on the bezier curve
+  if (bezier.contains(point)) {
+    return [0, new g.Segment(point, point)]
+  }
+
+  // Find minimum distance by checking distances to all segments of the bezier
+  let min_dist = Number.POSITIVE_INFINITY
+  let closest_segment = new g.Segment(point, point)
+
+  for (let segment of bezier.segments) {
+    let [dist, shortest_segment] = point2segment(point, segment)
+    if (dist < min_dist) {
+      min_dist = dist
+      closest_segment = shortest_segment
+    }
+  }
+
+  return [min_dist, closest_segment]
 }
 
 export function shape2polygon(shape, polygon): [number, g.Segment] {

@@ -12,6 +12,8 @@ import { Segment } from './Segment'
 import { Polygon } from './Polygon'
 import { Point, PointLike } from './Point'
 import { Shape, ShapeTag } from './Shape'
+import { Bezier } from './Bezier'
+import { Quadratic } from './Quadratic'
 
 /**
  * Class representing a circle
@@ -144,6 +146,8 @@ export class Circle extends Shape<Circle> {
     if (shape instanceof Circle) { return Intersection.intersectCircle2Circle(shape, this) }
     if (shape instanceof Box) { return Intersection.intersectCircle2Box(this, shape) }
     if (shape instanceof Arc) { return Intersection.intersectArc2Circle(shape, this) }
+    if (shape instanceof Bezier) { return Intersection.intersectCircle2Bezier(this, shape) }
+    if (shape instanceof Quadratic) { return Intersection.intersectCircle2Quadratic(this, shape) }
     if (shape instanceof Polygon) { return Intersection.intersectCircle2Polygon(this, shape) }
     throw new Error('unimplemented')
   }
@@ -160,6 +164,8 @@ export class Circle extends Shape<Circle> {
     if (shape instanceof Line) { return Distance.circle2line(this, shape) }
     if (shape instanceof Segment) { return Distance.reverse(Distance.segment2circle(shape, this)) }
     if (shape instanceof Arc) { return Distance.reverse(Distance.arc2circle(shape, this)) }
+    if (shape instanceof Bezier) { return Distance.bezier2circle(shape, this) }
+    if (shape instanceof Quadratic) { return Distance.quadratic2circle(shape, this) }
     if (shape instanceof Polygon) { return Distance.shape2polygon(this, shape) }
     if (shape instanceof PlanarSet) { return Distance.shape2planarSet(this, shape) }
     throw new Error('unimplemented')

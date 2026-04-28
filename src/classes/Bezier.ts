@@ -9,6 +9,7 @@ import * as Intersection from '../algorithms/intersection'
 import * as Distance from '../algorithms/distance'
 import * as curves from './curves'
 import { Quadratic } from './Quadratic'
+import { Polygon } from './Polygon'
 
 const EMPTY = Object.freeze([]) as any[]
 
@@ -406,6 +407,9 @@ function getSegmentDistance(shape: Shape): (s: Segment, o: any) => [number, Segm
   }
   if (shape instanceof Bezier) {
     return Distance.segment2bezier
+  }
+  if (shape instanceof geom.Polygon) {
+    return Distance.segment2polygon
   }
   throw new Error('unimplemented')
 }

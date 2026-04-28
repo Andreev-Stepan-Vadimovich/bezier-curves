@@ -129,6 +129,50 @@ export function intersectSegment2Line(seg: g.Segment, line: g.Line): g.Point[] {
   return intersectLine2Line(line1, line)
 }
 
+export function intersectQuadratic2Line(quad: g.Quadratic, line: g.Line): g.Point[] {
+  let ip: g.Point[] = []
+
+  // Quick reject using bounding boxes
+  if (!quad.box.intersect(line.box)) {
+    return ip
+  }
+
+  // Find intersections with all segments of the quadratic curve
+  for (let segment of quad.segments) {
+    let segment_ips = intersectSegment2Line(segment, line)
+    for (let pt of segment_ips) {
+      // Check if point is not already in the list
+      if (!ptInIntPoints(pt, ip)) {
+        ip.push(pt)
+      }
+    }
+  }
+
+  return ip
+}
+
+export function intersectBezier2Line(bezier: g.Bezier, line: g.Line): g.Point[] {
+  let ip: g.Point[] = []
+
+  // Quick reject using bounding boxes
+  if (!bezier.box.intersect(line.box)) {
+    return ip
+  }
+
+  // Find intersections with all segments of the bezier curve
+  for (let segment of bezier.segments) {
+    let segment_ips = intersectSegment2Line(segment, line)
+    for (let pt of segment_ips) {
+      // Check if point is not already in the list
+      if (!ptInIntPoints(pt, ip)) {
+        ip.push(pt)
+      }
+    }
+  }
+
+  return ip
+}
+
 export function intersectSegment2Segment(seg1: g.Segment, seg2: g.Segment): g.Point[] {
   let ip = []
 
@@ -824,6 +868,10 @@ export function intersectEdge2Line(edge: g.Edge, line: g.Line): g.Point[] {
     return intersectSegment2Line(edge.shape, line)
   if (edge.isArc())
     return intersectLine2Arc(line, edge.shape)
+  if (edge.isQuadratic())
+    return intersectQuadratic2Line(edge.shape, line)
+  if (edge.isBezier())
+    return intersectBezier2Line(edge.shape, line)
   throw new Error('unimplemented')
 }
 
@@ -832,6 +880,10 @@ export function intersectEdge2Circle(edge: g.Edge, circle: g.Circle): g.Point[] 
     return intersectSegment2Circle(edge.shape, circle)
   if (edge.isArc())
     return intersectArc2Circle(edge.shape, circle)
+  if (edge.isQuadratic())
+    return intersectCircle2Quadratic(circle, edge.shape)
+  if (edge.isBezier())
+    return intersectCircle2Bezier(circle, edge.shape)
   throw new Error('unimplemented')
 }
 
@@ -917,6 +969,50 @@ export function intersectCircle2Polygon(circle: g.Circle, polygon: g.Polygon): g
   return ip
 }
 
+export function intersectCircle2Quadratic(circle: g.Circle, quad: g.Quadratic): g.Point[] {
+  let ip: g.Point[] = []
+
+  // Quick reject using bounding boxes
+  if (!circle.box.intersect(quad.box)) {
+    return ip
+  }
+
+  // Find intersections with all segments of the quadratic curve
+  for (let segment of quad.segments) {
+    let segment_ips = intersectSegment2Circle(segment, circle)
+    for (let pt of segment_ips) {
+      // Check if point is not already in the list
+      if (!ptInIntPoints(pt, ip)) {
+        ip.push(pt)
+      }
+    }
+  }
+
+  return ip
+}
+
+export function intersectCircle2Bezier(circle: g.Circle, bezier: g.Bezier): g.Point[] {
+  let ip: g.Point[] = []
+
+  // Quick reject using bounding boxes
+  if (!circle.box.intersect(bezier.box)) {
+    return ip
+  }
+
+  // Find intersections with all segments of the bezier curve
+  for (let segment of bezier.segments) {
+    let segment_ips = intersectSegment2Circle(segment, circle)
+    for (let pt of segment_ips) {
+      // Check if point is not already in the list
+      if (!ptInIntPoints(pt, ip)) {
+        ip.push(pt)
+      }
+    }
+  }
+
+  return ip
+}
+
 export function intersectEdge2Edge(edge1: g.Edge, edge2: g.Edge): g.Point[] {
   if (edge1.isSegment()) { return intersectEdge2Segment(edge2, edge1.shape) }
   if (edge1.isArc()) { return intersectEdge2Arc(edge2, edge1.shape) }
@@ -987,6 +1083,10 @@ export function intersectShape2Polygon(shape: g.Shape<any>, polygon: g.Polygon):
     return intersectSegment2Polygon(shape, polygon)
   } else if (shape instanceof g.Arc) {
     return intersectArc2Polygon(shape, polygon)
+  } else if (shape instanceof g.Quadratic) {
+    return intersectQuadratic2Polygon(shape, polygon)
+  } else if (shape instanceof g.Bezier) {
+    return intersectBezier2Polygon(shape, polygon)
   } else {
     return []
   }

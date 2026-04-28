@@ -185,6 +185,20 @@ export function segment2bezier(segment: g.Segment, bezier: g.Bezier): [number, g
 }
 
 /**
+ * Calculate distance and shortest segment between segment and polygon
+ */
+export function segment2polygon(segment: g.Segment, polygon: g.Polygon): [number, g.Segment] {
+  let min_dist_and_segment = [Number.POSITIVE_INFINITY, new g.Segment()] as [number, g.Segment]
+  for (let edge of polygon.edges) {
+    let [dist, shortest_segment] = segment.distanceTo(edge.shape)
+    if (Utils.LT(dist, min_dist_and_segment[0])) {
+      min_dist_and_segment = [dist, shortest_segment] as [number, g.Segment]
+    }
+  }
+  return min_dist_and_segment
+}
+
+/**
  * Calculate distance and shortest segment between segment and line
  */
 export function segment2line(seg: g.Segment, line: g.Line): [number, g.Segment] {
@@ -437,6 +451,68 @@ export function arc2circle(arc, circle2): [number, g.Segment] {
 
     return dist_and_segment[0]
   }
+}
+
+/**
+ * Calculate distance and shortest segment between quadratic and circle
+ */
+export function quadratic2circle(quadratic: g.Quadratic, circle: g.Circle): [number, g.Segment] {
+  // Case 1: Quadratic and circle intersect - return zero distance
+  let ip = Intersection.intersectCircle2Quadratic(circle, quadratic)
+  if (ip.length > 0) {
+    return [0, new g.Segment(ip[0], ip[0])]
+  }
+
+  // Case 2: No intersection - find minimum distance
+  let dist_and_segment: [number, g.Segment][] = []
+
+  // Distance from quadratic start to circle
+  dist_and_segment.push(point2circle(quadratic.start, circle))
+
+  // Distance from quadratic end to circle
+  dist_and_segment.push(point2circle(quadratic.end, circle))
+
+  // Check distances from sample points along the quadratic curve to circle
+  const sampleCount = 10
+  for (let i = 1; i < sampleCount; i++) {
+    const t = i / sampleCount
+    const point = quadratic.pointAtLength(quadratic.length * t)
+    dist_and_segment.push(point2circle(point, circle))
+  }
+
+  sort(dist_and_segment)
+  return dist_and_segment[0]
+}
+
+/**
+ * Calculate distance and shortest segment between bezier and circle
+ */
+export function bezier2circle(bezier: g.Bezier, circle: g.Circle): [number, g.Segment] {
+  // Case 1: Bezier and circle intersect - return zero distance
+  let ip = Intersection.intersectCircle2Bezier(circle, bezier)
+  if (ip.length > 0) {
+    return [0, new g.Segment(ip[0], ip[0])]
+  }
+
+  // Case 2: No intersection - find minimum distance
+  let dist_and_segment: [number, g.Segment][] = []
+
+  // Distance from bezier start to circle
+  dist_and_segment.push(point2circle(bezier.start, circle))
+
+  // Distance from bezier end to circle
+  dist_and_segment.push(point2circle(bezier.end, circle))
+
+  // Check distances from sample points along the bezier curve to circle
+  const sampleCount = 10
+  for (let i = 1; i < sampleCount; i++) {
+    const t = i / sampleCount
+    const point = bezier.pointAtLength(bezier.length * t)
+    dist_and_segment.push(point2circle(point, circle))
+  }
+
+  sort(dist_and_segment)
+  return dist_and_segment[0]
 }
 
 /**

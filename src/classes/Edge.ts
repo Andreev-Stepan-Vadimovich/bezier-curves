@@ -162,9 +162,62 @@ export class Edge<T extends EdgeShape = EdgeShape> {
       ) {
         flag = Overlap.OPPOSITE
       }
+    } else if (shape1 instanceof Bezier && shape2 instanceof Bezier) {
+      if (
+        shape1.start.equalTo(shape2.start) &&
+        shape1.end.equalTo(shape2.end) &&
+        shape1.middle().equalTo(shape2.middle())
+      ) {
+        flag = Overlap.SAME
+      } else if (
+        shape1.start.equalTo(shape2.end) &&
+        shape1.end.equalTo(shape2.start) &&
+        shape1.middle().equalTo(shape2.middle())
+      ) {
+        flag = Overlap.OPPOSITE
+      }
+    } else if (shape1 instanceof Quadratic && shape2 instanceof Quadratic) {
+      if (
+        shape1.start.equalTo(shape2.start) &&
+        shape1.end.equalTo(shape2.end) &&
+        shape1.middle().equalTo(shape2.middle())
+      ) {
+        flag = Overlap.SAME
+      } else if (
+        shape1.start.equalTo(shape2.end) &&
+        shape1.end.equalTo(shape2.start) &&
+        shape1.middle().equalTo(shape2.middle())
+      ) {
+        flag = Overlap.OPPOSITE
+      }
     } else if (
       (shape1 instanceof Segment && shape2 instanceof Arc) ||
       (shape1 instanceof Arc && shape2 instanceof Segment)
+    ) {
+      if (
+        shape1.start.equalTo(shape2.start) &&
+        shape1.end.equalTo(shape2.end) &&
+        shape1.middle().equalTo(shape2.middle())
+      ) {
+        flag = Overlap.SAME
+      } else if (
+        shape1.start.equalTo(shape2.end) &&
+        shape1.end.equalTo(shape2.start) &&
+        shape1.middle().equalTo(shape2.middle())
+      ) {
+        flag = Overlap.OPPOSITE
+      }
+    } else if (
+      (shape1 instanceof Segment && shape2 instanceof Bezier) ||
+      (shape1 instanceof Bezier && shape2 instanceof Segment) ||
+      (shape1 instanceof Arc && shape2 instanceof Bezier) ||
+      (shape1 instanceof Bezier && shape2 instanceof Arc) ||
+      (shape1 instanceof Segment && shape2 instanceof Quadratic) ||
+      (shape1 instanceof Quadratic && shape2 instanceof Segment) ||
+      (shape1 instanceof Arc && shape2 instanceof Quadratic) ||
+      (shape1 instanceof Quadratic && shape2 instanceof Arc) ||
+      (shape1 instanceof Bezier && shape2 instanceof Quadratic) ||
+      (shape1 instanceof Quadratic && shape2 instanceof Bezier)
     ) {
       if (
         shape1.start.equalTo(shape2.start) &&

@@ -10,6 +10,7 @@ import * as Distance from '../algorithms/distance'
 import * as curves from './curves'
 import { Bezier } from './Bezier'
 import { Vector } from './Vector'
+import { Polygon } from './Polygon'
 
 const EMPTY = Object.freeze([]) as any[]
 
@@ -381,6 +382,9 @@ function getSegmentDistance(shape: Shape): (s: Segment, o: any) => [number, Segm
   }
   if (shape instanceof Bezier) {
     return Distance.segment2bezier
+  }
+  if (shape instanceof Polygon) {
+    return Distance.segment2polygon
   }
   throw new Error('unimplemented')
 }

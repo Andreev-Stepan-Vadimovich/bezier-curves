@@ -216,6 +216,16 @@ export class Segment extends Shape<Segment> {
       return [dist, shortest_segment]
     }
 
+    if (shape instanceof geom.Quadratic) {
+      let [dist, shortest_segment] = Distance.segment2quadratic(this, shape)
+      return [dist, shortest_segment]
+    }
+
+    if (shape instanceof geom.Bezier) {
+      let [dist, shortest_segment] = Distance.segment2bezier(this, shape)
+      return [dist, shortest_segment]
+    }
+
     if (shape instanceof geom.Polygon) {
       let [dist, shortest_segment] = Distance.shape2polygon(this, shape)
       return [dist, shortest_segment]
@@ -225,6 +235,8 @@ export class Segment extends Shape<Segment> {
       let [dist, shortest_segment] = Distance.shape2planarSet(this, shape)
       return [dist, shortest_segment]
     }
+
+    throw new Error('unimplemented')
   }
 
   /**

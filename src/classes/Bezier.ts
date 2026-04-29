@@ -7,6 +7,7 @@ import { lerp } from '../utils/lerp'
 import * as Utils from '../utils/utils'
 import * as Intersection from '../algorithms/intersection'
 import * as Distance from '../algorithms/distance'
+import * as BezierAlgebraic from '../algorithms/bezierAlgebraic'
 import * as curves from './curves'
 import { Quadratic } from './Quadratic'
 import { Polygon } from './Polygon'
@@ -157,7 +158,7 @@ export class Bezier extends Shape<Bezier> {
    * Returns true if curve contains point
    */
   contains(point: Point): boolean {
-    return this.segments.some((segment) => segment.contains(point))
+    return BezierAlgebraic.bezierContainsPoint(this, point, Utils.getTolerance())
   }
 
   /**
@@ -181,6 +182,34 @@ export class Bezier extends Shape<Bezier> {
    * @returns {Segment} shortest segment between segment and shape (started at segment, ended at shape)
    */
   distanceTo(shape: Shape): [number, Segment] {
+    // Use algebraic method for more precise distance calculation with specific shapes
+    if (shape instanceof geom.Point) {
+      const [dist, seg] = BezierAlgebraic.bezierClosestPoint(this, shape)
+      return [dist, seg.reverse()]
+    }
+    
+    if (shape instanceof geom.Segment) {
+      return BezierAlgebraic.bezierToSegmentDistance(this, shape)
+    }
+    
+    if (shape instanceof geom.Polygon) {
+      return BezierAlgebraic.bezierToPolygonDistance(this, shape)
+    }
+
+    if (shape instanceof geom.Bezier) {
+      return BezierAlgebraic.bezierToBezierDistance(this, shape)
+    }
+
+    console.log('distanceTo after checks')
+    if (shape instanceof geom.Point) { console.log('shape instance of Point') }
+    if (shape instanceof geom.Circle) { console.log('shape instance of Circle') }
+    if (shape instanceof geom.Line) { console.log('shape instance of Line') }
+    if (shape instanceof geom.Segment) { console.log('shape instance of Segment') }
+    if (shape instanceof geom.Arc) { console.log('shape instance of Arc') }
+    if (shape instanceof geom.Bezier) { console.log('shape instance of Bezier') }
+    if (shape instanceof geom.Quadratic) { console.log('shape instance of Quadratic') }
+    if (shape instanceof geom.Polygon) { console.log('shape instance of Polygon') }
+    // Fall back to segment-based approximation for other shapes
     const distance = getSegmentDistance(shape)
     return this.segments.reduce(
       (result, current) => {
@@ -336,14 +365,8 @@ export class Bezier extends Shape<Bezier> {
   }
 
   distanceToPoint(point: Point) {
-    return this.segments.reduce(
-      (result, current) => {
-        const currentResult = Distance.segment2point(current, point)
-        if (currentResult[0] < result[0]) return currentResult
-        return result
-      },
-      [Infinity, Segment.EMPTY as Segment] as [number, Segment],
-    )
+    const [dist, seg] = BezierAlgebraic.bezierClosestPoint(this, point)
+    return [dist, seg.reverse()] as [number, Segment]
   }
 
   /**

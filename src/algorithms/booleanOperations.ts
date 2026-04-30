@@ -311,8 +311,6 @@ function fixBoundaryConflicts(
     let edge_from1 = cur_int_point1.edge_after
     let edge_to1 = next_int_point1.edge_before
 
-    console.log('before case 1')
-
     // Case #1. One of the ends is not boundary - probably tiny edge wrongly marked as boundary
     if (edge_from1.bv === Inclusion.BOUNDARY && edge_to1.bv != Inclusion.BOUNDARY) {
       edge_from1.bv = edge_to1.bv
@@ -339,8 +337,6 @@ function fixBoundaryConflicts(
         edge_tmp = edge_tmp.next
       }
     }
-
-    console.log('before case 2')
 
     // Case #2. Both of the ends boundary. Check all the edges in the middle
     // If some edges in the middle are not boundary then update bv of 'from' and 'to' edges
@@ -369,8 +365,6 @@ function fixBoundaryConflicts(
       }
       continue // all middle edges are boundary, proceed with this
     }
-
-    console.log('before case 3')
 
     // Case 3. One of the ends is inner, another is outer
     if (

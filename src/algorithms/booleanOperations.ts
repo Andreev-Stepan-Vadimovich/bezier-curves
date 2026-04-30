@@ -392,8 +392,6 @@ function fixBoundaryConflicts(
           }
           
           if (dist < tolerance) {
-            // it should be very close
-            // let pt = edge_tmp.end;
             // add to the list of intersections of poly1
             addToIntPoints(edge_tmp, segment.start, int_points1)
 

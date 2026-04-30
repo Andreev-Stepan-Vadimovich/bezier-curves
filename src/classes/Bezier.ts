@@ -7,7 +7,7 @@ import { lerp } from '../utils/lerp'
 import * as Utils from '../utils/utils'
 import * as Intersection from '../algorithms/intersection'
 import * as Distance from '../algorithms/distance'
-import * as BezierAlgebraic from '../algorithms/bezierAlgebraic'
+import * as BezierAlgebraic from '../algorithms/bezierAlgebraicAlgoritms'
 import * as curves from './curves'
 import { Quadratic } from './Quadratic'
 import { Polygon } from './Polygon'
@@ -189,26 +189,17 @@ export class Bezier extends Shape<Bezier> {
     }
     
     if (shape instanceof geom.Segment) {
-      return BezierAlgebraic.bezierToSegmentDistance(this, shape)
+      return Distance.bezier2segment(this, shape)
     }
     
     if (shape instanceof geom.Polygon) {
-      return BezierAlgebraic.bezierToPolygonDistance(this, shape)
+      return Distance.bezier2polygon(this, shape)
     }
 
     if (shape instanceof geom.Bezier) {
-      return BezierAlgebraic.bezierToBezierDistance(this, shape)
+      return Distance.bezier2bezier(this, shape)
     }
 
-    console.log('distanceTo after checks')
-    if (shape instanceof geom.Point) { console.log('shape instance of Point') }
-    if (shape instanceof geom.Circle) { console.log('shape instance of Circle') }
-    if (shape instanceof geom.Line) { console.log('shape instance of Line') }
-    if (shape instanceof geom.Segment) { console.log('shape instance of Segment') }
-    if (shape instanceof geom.Arc) { console.log('shape instance of Arc') }
-    if (shape instanceof geom.Bezier) { console.log('shape instance of Bezier') }
-    if (shape instanceof geom.Quadratic) { console.log('shape instance of Quadratic') }
-    if (shape instanceof geom.Polygon) { console.log('shape instance of Polygon') }
     // Fall back to segment-based approximation for other shapes
     const distance = getSegmentDistance(shape)
     return this.segments.reduce(
@@ -222,15 +213,15 @@ export class Bezier extends Shape<Bezier> {
   }
 
   tangentInStart(): geom.Vector {
-    // Для кубической кривой Безье касательный вектор в начальной точке (t=0)
-    // равен производной: B'(0) = 3(control1 - start)
+    // For a cubic Bezier curve, the tangent vector at the starting point (t=0)
+    // equal to the derivative: B'(0) = 3(control1 - start)
     let vec = new geom.Vector(this.start, this.control1)
     return vec.normalize()
   }
 
   tangentInEnd(): geom.Vector {
-    // Для кубической кривой Безье касательный вектор в конечной точке (t=1)
-    // равен производной: B'(1) = 3(end - control2)
+    // For a cubic Bezier curve, the tangent vector at the end point (t=1)
+    // equal to the derivative: B'(1) = 3(end - control2)
     let vec = new geom.Vector(this.control2, this.end)
     return vec.normalize()
   }
@@ -248,23 +239,23 @@ export class Bezier extends Shape<Bezier> {
    * to start or end point of the segment. Returns empty array if point does not belong to segment
    */
   split(point: Point): (Bezier | null)[] {
-    // Проверяем, принадлежит ли точка кривой
+    // Checking whether a point belongs to a curve
     if (!this.contains(point)) {
       return []
     }
 
-    // Если точка совпадает с начальной точкой
+    // If the point coincides with the starting point
     if (this.start.equalTo(point)) {
       return [this.clone()]
     }
 
-    // Если точка совпадает с конечной точкой
+    // If the point matches the end point
     if (this.end.equalTo(point)) {
       return [this.clone()]
     }
 
-    // Находим параметр t для точки на кривой
-    // Используем LUT (lookup table) для поиска ближайшей точки
+    // Finding the parameter t for a point on the curve
+    // We use LUT (lookup table) to find the nearest point
     const lut = this.lut
     let minDistance = Infinity
     let bestIndex = -1
@@ -280,15 +271,15 @@ export class Bezier extends Shape<Bezier> {
       }
     }
 
-    // Если не нашли близкую точку, возвращаем пустой массив
+    // If a close point is not found, return an empty array
     if (bestIndex === -1 || minDistance > Utils.getTolerance()) {
       return []
     }
 
-    // Получаем параметр t из LUT
+    // Getting parameter t from LUT
     const t = lut[bestIndex * 4 + 2]
 
-    // Используем существующий метод splitAtT для разделения кривой
+    // Using splitAtT method to split a curve
     return this.splitAtT(t)
   }
 

@@ -173,6 +173,14 @@ export class Segment extends Shape<Segment> {
       return Intersection.intersectSegment2Polygon(this, shape)
     }
 
+    if (shape instanceof geom.Bezier) {
+      return Intersection.intersectSegment2Bezier(this, shape)
+    }
+
+    if (shape instanceof geom.Quadratic) {
+      return Intersection.intersectSegment2Quadratic(this, shape)
+    }
+
     throw new Error('unreachable')
   }
 
@@ -208,6 +216,16 @@ export class Segment extends Shape<Segment> {
       return [dist, shortest_segment]
     }
 
+    if (shape instanceof geom.Quadratic) {
+      let [dist, shortest_segment] = Distance.segment2quadratic(this, shape)
+      return [dist, shortest_segment]
+    }
+
+    if (shape instanceof geom.Bezier) {
+      let [dist, shortest_segment] = Distance.segment2bezier(this, shape)
+      return [dist, shortest_segment]
+    }
+
     if (shape instanceof geom.Polygon) {
       let [dist, shortest_segment] = Distance.shape2polygon(this, shape)
       return [dist, shortest_segment]
@@ -217,6 +235,8 @@ export class Segment extends Shape<Segment> {
       let [dist, shortest_segment] = Distance.shape2planarSet(this, shape)
       return [dist, shortest_segment]
     }
+
+    throw new Error('unimplemented')
   }
 
   /**

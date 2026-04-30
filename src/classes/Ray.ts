@@ -132,6 +132,8 @@ export class Ray extends Shape<Ray> {
     if (shape instanceof geom.Circle) { return Intersection.intersectRay2Circle(this, shape) }
     if (shape instanceof geom.Box) { return Intersection.intersectRay2Box(this, shape) }
     if (shape instanceof geom.Polygon) { return Intersection.intersectRay2Polygon(this, shape) }
+    if (shape instanceof geom.Bezier) { return Intersection.intersectRay2Bezier(this, shape) }
+    if (shape instanceof geom.Quadratic) { return Intersection.intersectRay2Quadratic(this, shape) }
     throw new Error('unimplemented')
   }
 

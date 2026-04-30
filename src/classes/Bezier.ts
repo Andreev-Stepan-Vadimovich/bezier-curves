@@ -7,7 +7,9 @@ import { lerp } from '../utils/lerp'
 import * as Utils from '../utils/utils'
 import * as Intersection from '../algorithms/intersection'
 import * as Distance from '../algorithms/distance'
+import * as BezierAlgebraic from '../algorithms/bezierAlgebraicAlgoritms'
 import * as curves from './curves'
+import { Quadratic } from './Quadratic'
 
 const EMPTY = Object.freeze([]) as any[]
 
@@ -155,7 +157,7 @@ export class Bezier extends Shape<Bezier> {
    * Returns true if curve contains point
    */
   contains(point: Point): boolean {
-    return this.segments.some((segment) => segment.contains(point))
+    return BezierAlgebraic.bezierContainsPoint(this, point, Utils.getTolerance())
   }
 
   /**
@@ -179,6 +181,29 @@ export class Bezier extends Shape<Bezier> {
    * @returns {Segment} shortest segment between segment and shape (started at segment, ended at shape)
    */
   distanceTo(shape: Shape): [number, Segment] {
+    // Use algebraic method for more precise distance calculation with specific shapes
+    if (shape instanceof geom.Point) {
+      const [dist, seg] = BezierAlgebraic.bezierClosestPoint(this, shape)
+      return [dist, seg.reverse()]
+    }
+    
+    if (shape instanceof geom.Segment) {
+      return Distance.bezier2segment(this, shape)
+    }
+    
+    if (shape instanceof geom.Polygon) {
+      return Distance.bezier2polygon(this, shape)
+    }
+
+    if (shape instanceof geom.Bezier) {
+      return Distance.bezier2bezier(this, shape)
+    }
+
+    if (shape instanceof geom.Circle) {
+      return Distance.bezier2circle(this, shape)
+    }
+
+    // Fall back to segment-based approximation for other shapes
     const distance = getSegmentDistance(shape)
     return this.segments.reduce(
       (result, current) => {
@@ -188,6 +213,20 @@ export class Bezier extends Shape<Bezier> {
       },
       [Infinity, Segment.EMPTY as Segment],
     )
+  }
+
+  tangentInStart(): geom.Vector {
+    // For a cubic Bezier curve, the tangent vector at the starting point (t=0)
+    // equal to the derivative: B'(0) = 3(control1 - start)
+    let vec = new geom.Vector(this.start, this.control1)
+    return vec.normalize()
+  }
+
+  tangentInEnd(): geom.Vector {
+    // For a cubic Bezier curve, the tangent vector at the end point (t=1)
+    // equal to the derivative: B'(1) = 3(end - control2)
+    let vec = new geom.Vector(this.control2, this.end)
+    return vec.normalize()
   }
 
   /**
@@ -202,8 +241,49 @@ export class Bezier extends Shape<Bezier> {
    * if point is inside segment. Returns clone of this segment if query point is incident
    * to start or end point of the segment. Returns empty array if point does not belong to segment
    */
-  split(_point: Point): (Bezier | null)[] {
-    throw new Error('unimplemented')
+  split(point: Point): (Bezier | null)[] {
+    // Checking whether a point belongs to a curve
+    if (!this.contains(point)) {
+      return []
+    }
+
+    // If the point coincides with the starting point
+    if (this.start.equalTo(point)) {
+      return [this.clone()]
+    }
+
+    // If the point matches the end point
+    if (this.end.equalTo(point)) {
+      return [this.clone()]
+    }
+
+    // Finding the parameter t for a point on the curve
+    // We use LUT (lookup table) to find the nearest point
+    const lut = this.lut
+    let minDistance = Infinity
+    let bestIndex = -1
+
+    for (let i = 0; i < lut.length; i += 4) {
+      const x = lut[i + 0]
+      const y = lut[i + 1]
+      const dist = Math.hypot(x - point.x, y - point.y)
+      
+      if (dist < minDistance) {
+        minDistance = dist
+        bestIndex = i / 4
+      }
+    }
+
+    // If a close point is not found, return an empty array
+    if (bestIndex === -1 || minDistance > Utils.getTolerance()) {
+      return []
+    }
+
+    // Getting parameter t from LUT
+    const t = lut[bestIndex * 4 + 2]
+
+    // Using splitAtT method to split a curve
+    return this.splitAtT(t)
   }
 
   splitAtLength(length: number): (Bezier | null)[] {
@@ -279,14 +359,8 @@ export class Bezier extends Shape<Bezier> {
   }
 
   distanceToPoint(point: Point) {
-    return this.segments.reduce(
-      (result, current) => {
-        const currentResult = Distance.segment2point(current, point)
-        if (currentResult[0] < result[0]) return currentResult
-        return result
-      },
-      [Infinity, Segment.EMPTY as Segment] as [number, Segment],
-    )
+    const [dist, seg] = BezierAlgebraic.bezierClosestPoint(this, point)
+    return [dist, seg.reverse()] as [number, Segment]
   }
 
   /**
@@ -326,6 +400,12 @@ function getSegmentIntersect(shape: Shape) {
   if (shape instanceof Arc) {
     return Intersection.intersectSegment2Arc
   }
+  if (shape instanceof Bezier) {
+    return Intersection.intersectSegment2Bezier
+  }
+  if (shape instanceof Quadratic) {
+    return Intersection.intersectSegment2Quadratic
+  }
   throw new Error('unimplemented')
 }
 
@@ -338,6 +418,15 @@ function getSegmentDistance(shape: Shape): (s: Segment, o: any) => [number, Segm
   }
   if (shape instanceof Arc) {
     return Distance.segment2arc
+  }
+  if (shape instanceof Quadratic) {
+    return Distance.segment2quadratic
+  }
+  if (shape instanceof Bezier) {
+    return Distance.segment2bezier
+  }
+  if (shape instanceof geom.Polygon) {
+    return Distance.segment2polygon
   }
   throw new Error('unimplemented')
 }

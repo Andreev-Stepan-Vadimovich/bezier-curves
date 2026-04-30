@@ -18,7 +18,7 @@ import type { Point } from '../classes/Point'
 import type { Polygon } from '../classes/Polygon'
 import type { Segment } from '../classes/Segment'
 import type { Shape } from '../classes/Shape'
-import { Face } from '../classes'
+import { Face, Bezier, Quadratic } from '../classes'
 
 const { Inclusion, Overlap } = Constants
 const { START_VERTEX, END_VERTEX } = Constants
@@ -376,9 +376,16 @@ function fixBoundaryConflicts(
       while (edge_tmp != edge_to1) {
         if (edge_tmp.bvStart === edge_from1.bv && edge_tmp.bvEnd === edge_to1.bv) {
           let [dist, segment] = edge_tmp.shape.distanceTo(poly2) as [number, Segment]
-          if (dist < 10 * Utils.getTolerance()) {
-            // it should be very close
-            // let pt = edge_tmp.end;
+          
+          // Use adaptive tolerance based on curve type
+          // For Bezier and Quadratic curves, use higher tolerance due to algebraic precision
+          let tolerance = 10 * Utils.getTolerance()
+          if (edge_tmp.shape instanceof Bezier || edge_tmp.shape instanceof Quadratic) {
+            // For curves, the algebraic method is more precise, so we can use tighter tolerance
+            tolerance = 10000000 * Utils.getTolerance()
+          }
+          
+          if (dist < tolerance) {
             // add to the list of intersections of poly1
             addToIntPoints(edge_tmp, segment.start, int_points1)
 

@@ -573,7 +573,9 @@ export class Polygon extends Shape<Polygon> {
       shape instanceof geom.Circle ||
       shape instanceof geom.Line ||
       shape instanceof geom.Segment ||
-      shape instanceof geom.Arc
+      shape instanceof geom.Arc ||
+      shape instanceof geom.Quadratic ||
+      shape instanceof geom.Bezier
     ) {
       let [dist, shortest_segment] = Distance.shape2polygon(shape, this)
       shortest_segment = shortest_segment.reverse()
@@ -624,6 +626,14 @@ export class Polygon extends Shape<Polygon> {
 
     if (shape instanceof geom.Arc) {
       return Intersection.intersectArc2Polygon(shape, this)
+    }
+
+    if (shape instanceof geom.Quadratic) {
+      return Intersection.intersectQuadratic2Polygon(shape, this)
+    }
+
+    if (shape instanceof geom.Bezier) {
+      return Intersection.intersectBezier2Polygon(shape, this)
     }
 
     if (shape instanceof geom.Polygon) {

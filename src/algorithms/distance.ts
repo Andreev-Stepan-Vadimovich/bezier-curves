@@ -3,6 +3,8 @@ import * as Intersection from '../algorithms/intersection'
 import * as g from '../classes'
 import { PlanarSet } from '../data_structures/PlanarSet'
 import { IntervalTree } from '../data_structures/interval-tree'
+import { bezierClosestPoint, bezierDerivative, bezierPoint } from './bezierAlgebraicAlgoritms'
+import { quadraticClosestPoint, quadraticDerivative, quadraticPoint, quadraticSecondDerivative } from './quadraticAlgebraicAlgoritms'
 
 export function reverse(result: [number, g.Segment]): [number, g.Segment] {
   result[1] = result[1].reverse()
@@ -102,6 +104,106 @@ export function segment2point(segment: g.Segment, point: g.Point): [number, g.Se
   const result = point2segment(point, segment)
   result[1] = result[1].reverse()
   return result
+}
+
+/**
+ * Calculate distance and shortest segment between segment and quadratic
+ */
+export function segment2quadratic(segment: g.Segment, quadratic: g.Quadratic): [number, g.Segment] {
+  // Check for intersections first
+    const intersections = quadratic.intersect(segment)
+    if (intersections.length > 0) {
+      return [0, new g.Segment(intersections[0], intersections[0])]
+    }
+    
+    let minDist = Infinity
+    let minSegment = new g.Segment()
+    
+    const updateMin = (dist: number, seg: g.Segment, reverse: boolean = false) => {
+      if (dist < minDist) {
+        minDist = dist
+        minSegment = reverse ? seg.reverse() : seg
+      }
+    }
+    
+    // 1. Closest point on quadratic to segment endpoints
+    const [dist1, seg1] = quadraticClosestPoint(quadratic, segment.start)
+    updateMin(dist1, seg1, true)
+    
+    const [dist2, seg2] = quadraticClosestPoint(quadratic, segment.end)
+    updateMin(dist2, seg2, true)
+    
+    // 2. Closest point on segment to quadratic endpoints
+    const [dist3, seg3] = segment.distanceTo(quadratic.start)
+    updateMin(dist3, seg3)
+    
+    const [dist4, seg4] = segment.distanceTo(quadratic.end)
+    updateMin(dist4, seg4)
+    
+    // 3. Sample intermediate points on quadratic for additional coverage
+    const sampleCount = 20
+    for (let i = 1; i < sampleCount; i++) {
+      const t = i / sampleCount
+      const pt = quadraticPoint(quadratic.start, quadratic.control1, quadratic.end, t)
+      const [dist, seg] = segment.distanceTo(pt)
+      updateMin(dist, seg)
+    }
+    
+    return [minDist, minSegment]
+}
+
+/**
+ * Calculate distance and shortest segment between segment and bezier
+ */
+export function segment2bezier(segment: g.Segment, bezier: g.Bezier): [number, g.Segment] {
+  // Case 1: Segment and bezier intersect - return zero distance
+  let ip = Intersection.intersectSegment2Bezier(segment, bezier)
+  if (ip.length > 0) {
+    return [0, new g.Segment(ip[0], ip[0])]
+  }
+
+  // Case 2: No intersection - find minimum distance
+  // Check distances from segment endpoints to bezier and vice versa
+  let dist_and_segment: [number, g.Segment][] = []
+
+  // Distance from segment start to bezier
+  let [dist_start, seg_start] = bezier.distanceToPoint(segment.start)
+  dist_and_segment.push([dist_start, seg_start.reverse()])
+
+  // Distance from segment end to bezier
+  let [dist_end, seg_end] = bezier.distanceToPoint(segment.end)
+  dist_and_segment.push([dist_end, seg_end.reverse()])
+
+  // Distance from bezier start to segment
+  dist_and_segment.push(point2segment(bezier.start, segment))
+
+  // Distance from bezier end to segment
+  dist_and_segment.push(point2segment(bezier.end, segment))
+
+  // Check distances from sample points along the bezier curve to segment
+  const sampleCount = 10
+  for (let i = 1; i < sampleCount; i++) {
+    const t = i / sampleCount
+    const point = bezier.pointAtLength(bezier.length * t)
+    dist_and_segment.push(point2segment(point, segment))
+  }
+
+  sort(dist_and_segment)
+  return dist_and_segment[0]
+}
+
+/**
+ * Calculate distance and shortest segment between segment and polygon
+ */
+export function segment2polygon(segment: g.Segment, polygon: g.Polygon): [number, g.Segment] {
+  let min_dist_and_segment = [Number.POSITIVE_INFINITY, new g.Segment()] as [number, g.Segment]
+  for (let edge of polygon.edges) {
+    let [dist, shortest_segment] = segment.distanceTo(edge.shape)
+    if (Utils.LT(dist, min_dist_and_segment[0])) {
+      min_dist_and_segment = [dist, shortest_segment] as [number, g.Segment]
+    }
+  }
+  return min_dist_and_segment
 }
 
 /**
@@ -360,6 +462,592 @@ export function arc2circle(arc, circle2): [number, g.Segment] {
 }
 
 /**
+ * Calculate distance and shortest segment between quadratic and circle
+ */
+export function quadratic2circle(quadratic: g.Quadratic, circle: g.Circle): [number, g.Segment] {
+  // Case 1: Quadratic and circle intersect - return zero distance
+  let ip = Intersection.intersectCircle2Quadratic(circle, quadratic)
+  if (ip.length > 0) {
+    return [0, new g.Segment(ip[0], ip[0])]
+  }
+
+  // Case 2: No intersection - find minimum distance
+  let dist_and_segment: [number, g.Segment][] = []
+
+  // Distance from quadratic start to circle
+  dist_and_segment.push(point2circle(quadratic.start, circle))
+
+  // Distance from quadratic end to circle
+  dist_and_segment.push(point2circle(quadratic.end, circle))
+
+  // Check distances from sample points along the quadratic curve to circle
+  const sampleCount = 10
+  for (let i = 1; i < sampleCount; i++) {
+    const t = i / sampleCount
+    const point = quadratic.pointAtLength(quadratic.length * t)
+    dist_and_segment.push(point2circle(point, circle))
+  }
+
+  sort(dist_and_segment)
+  return dist_and_segment[0]
+}
+
+/**
+ * Find closest points between two quadratic Bezier curves
+ * 
+ * Mathematical approach:
+ * Minimize D²(t,u) = ||B₁(t) - B₂(u)||²
+ * Critical points satisfy the system:
+ *   (B₁(t) - B₂(u)) · B₁'(t) = 0
+ *   (B₁(t) - B₂(u)) · B₂'(u) = 0
+ * 
+ * For quadratic Béziers, each equation is cubic in its parameter,
+ * giving a system of two cubic equations. We solve numerically with
+ * Newton-Raphson, using algebraic solutions for initialization.
+ * 
+ * @returns [minimum distance, segment connecting closest points]
+ */
+export function quadratic2quadratic(quadratic1: g.Quadratic, quadratic2: g.Quadratic): [number, g.Segment] {
+   const p = [quadratic1.start, quadratic1.control1, quadratic1.end]
+  const q = [quadratic2.start, quadratic2.control1, quadratic2.end]
+  
+  const pointDist = (a: g.Point, b: g.Point): number => 
+    Math.hypot(a.x - b.x, a.y - b.y)
+  
+  let minDist = Infinity
+  let minSeg = new g.Segment()
+  
+  const updateMin = (pt1: g.Point, pt2: g.Point) => {
+    const dist = pointDist(pt1, pt2)
+    if (dist < minDist) {
+      minDist = dist
+      minSeg = new g.Segment(pt1, pt2)
+    }
+  }
+
+  // Check for intersections
+  
+  try {
+    const intersections = quadratic1.intersect(quadratic2)
+    if (intersections?.length > 0) {
+      return [0, new g.Segment(intersections[0], intersections[0])]
+    }
+  } catch (e) {
+    // Continue with distance calculation if intersect fails
+  }
+  
+  // Check control points and endpoints
+  for (const pt1 of p) {
+    for (const pt2 of q) {
+      updateMin(pt1, pt2)
+    }
+  }
+  
+  // Endpoints of curve1 vs full curve2
+  for (const pt of p) {
+    const [dist, seg] = quadraticClosestPoint(quadratic2, pt)
+    if (dist < minDist) {
+      minDist = dist
+      minSeg = seg.reverse()
+    }
+  }
+  
+  // Endpoints of curve2 vs full curve1
+  for (const pt of q) {
+    const [dist, seg] = quadraticClosestPoint(quadratic1, pt)
+    if (dist < minDist) {
+      minDist = dist
+      minSeg = seg
+    }
+  }
+  
+  // Algebraic initialization + Newton-Raphson refinement
+  // 
+  // For each curve, find critical t values for closest point to the OTHER curve's
+  // control polygon, then use as initial guesses for the 2D Newton solver.
+  
+  const newtonSolve = (t0: number, u0: number): [number, number] | null => {
+    let t = t0, u = u0
+    const maxIter = 25
+    const tol = 1e-10
+    const eps = 1e-6
+    
+    for (let iter = 0; iter < maxIter; iter++) {
+      const B1 = quadraticPoint(p[0], p[1], p[2], t)
+      const B1p = quadraticDerivative(p[0], p[1], p[2], t)
+      const B1pp = quadraticSecondDerivative(p[0], p[1], p[2])
+      
+      const B2 = quadraticPoint(q[0], q[1], q[2], u)
+      const B2p = quadraticDerivative(q[0], q[1], q[2], u)
+      const B2pp = quadraticSecondDerivative(q[0], q[1], q[2])
+      
+      const diff = new g.Vector(B1.x - B2.x, B1.y - B2.y)
+      
+      // System: f(t,u) = (B1-B2)·B1' = 0, g(t,u) = (B1-B2)·B2' = 0
+      const f = diff.dot(B1p)
+      const f1 = diff.dot(B2p)
+      
+      if (Math.hypot(f, f1) < tol) {
+        return [Utils.clamp(t, 0, 1), Utils.clamp(u, 0, 1)]
+      }
+      
+      // Jacobian matrix:
+      // J = [ ∂f/∂t  ∂f/∂u ] = [ B1'·B1' + (B1-B2)·B1''    -B2'·B1' ]
+      //     [ ∂g/∂t  ∂g/∂u ]   [ B1'·B2'                    -B2'·B2' - (B1-B2)·B2'' ]
+      
+      const J11 = B1p.dot(B1p) + diff.dot(B1pp)
+      const J12 = -B2p.dot(B1p)
+      const J21 = B1p.dot(B2p)
+      const J22 = -B2p.dot(B2p) - diff.dot(B2pp)
+      
+      const det = J11 * J22 - J12 * J21
+      
+      if (Math.abs(det) < 1e-12) {
+        // Gradient descent fallback
+        const step = 0.02
+        t = Utils.clamp(t - step * f, 0, 1)
+        u = Utils.clamp(u - step * f1, 0, 1)
+        continue
+      }
+      
+      // Newton step
+      const dt = (J12 * f1 - J22 * f) / det
+      const du = (J21 * f - J11 * f1) / det
+      
+      if (Math.hypot(dt, du) < tol) {
+        t = Utils.clamp(t + dt, 0, 1)
+        u = Utils.clamp(u + du, 0, 1)
+        break
+      }
+      
+      t = Utils.clamp(t + dt, 0, 1)
+      u = Utils.clamp(u + du, 0, 1)
+    }
+    
+    return [t, u]
+  }
+  
+  // Generate initial guesses using algebraic closest-point solutions
+  const initialGuesses: Array<[number, number]> = []
+  
+  // Sample curve2 and find closest t on curve1 for each sample
+  for (let i = 0; i <= 4; i++) {
+    const uSample = i / 4
+    const pt2 = quadraticPoint(q[0], q[1], q[2], uSample)
+    const [_, __, tGuess] = quadraticClosestPoint(quadratic1, pt2)
+    initialGuesses.push([tGuess, uSample])
+  }
+  
+  // Sample curve1 and find closest u on curve2 for each sample
+  for (let i = 0; i <= 4; i++) {
+    const tSample = i / 4
+    const pt1 = quadraticPoint(p[0], p[1], p[2], tSample)
+    const [_, __, uGuess] = quadraticClosestPoint(quadratic2, pt1)
+    initialGuesses.push([tSample, uGuess])
+  }
+  
+  // Add uniform grid as backup
+  for (let i = 0; i <= 3; i++) {
+    for (let j = 0; j <= 3; j++) {
+      initialGuesses.push([i / 3, j / 3])
+    }
+  }
+  
+  // Run Newton-Raphson from each initial guess
+  const processed = new Set<string>()
+  for (const [t0, u0] of initialGuesses) {
+    const key = `${Math.round(t0 * 100)},${Math.round(u0 * 100)}`
+    if (processed.has(key)) continue
+    processed.add(key)
+    
+    const result = newtonSolve(t0, u0)
+    if (result) {
+      const [t, u] = result
+      const pt1 = quadraticPoint(p[0], p[1], p[2], t)
+      const pt2 = quadraticPoint(q[0], q[1], q[2], u)
+      updateMin(pt1, pt2)
+    }
+  }
+  
+  // Sampling safety net
+
+  const sampleCount = 30
+  for (let i = 0; i <= sampleCount; i++) {
+    const t = i / sampleCount
+    const pt1 = quadraticPoint(p[0], p[1], p[2], t)
+    const [dist, seg] = quadraticClosestPoint(quadratic2, pt1)
+    if (dist < minDist) {
+      minDist = dist
+      minSeg = seg.reverse()
+    }
+  }
+  
+  for (let j = 0; j <= sampleCount; j++) {
+    const u = j / sampleCount
+    const pt2 = quadraticPoint(q[0], q[1], q[2], u)
+    const [dist, seg] = quadraticClosestPoint(quadratic1, pt2)
+    if (dist < minDist) {
+      minDist = dist
+      minSeg = seg
+    }
+  }
+  
+  return [minDist, minSeg]
+}
+
+/**
+ * Calculate distance and shortest segment between quadratic and polygon
+ */
+export function quadratic2polygon(quadratic: g.Quadratic, polygon: g.Polygon): [number, g.Segment] {
+  let minDist = Infinity
+    let minSegment = new g.Segment()
+    
+    for (const edge of polygon.edges) {
+      let dist: number
+      let seg: g.Segment
+      
+      if (edge.isSegment()) {
+        [dist, seg] = segment2quadratic(edge.shape as g.Segment, quadratic)
+      } else if (edge.isQuadratic()) {
+        [dist, seg] = quadratic2quadratic(quadratic, edge.shape as g.Quadratic)
+      } else if (edge.isBezier()) {
+        // Quadratic to cubic - delegate to cubic implementation with conversion
+        [dist, seg] = quadratic.distanceTo(edge.shape)
+      } else {
+        // Arc or other shapes
+        [dist, seg] = quadratic.distanceTo(edge.shape)
+      }
+      
+      if (dist < minDist) {
+        minDist = dist
+        minSegment = seg
+      }
+    }
+    
+    return [minDist, minSegment]
+}
+
+/**
+ * Calculate distance and shortest segment between bezier and circle
+ */
+export function bezier2circle(bezier: g.Bezier, circle: g.Circle): [number, g.Segment] {
+  // Case 1: Bezier and circle intersect - return zero distance
+  let ip = Intersection.intersectCircle2Bezier(circle, bezier)
+  if (ip.length > 0) {
+    return [0, new g.Segment(ip[0], ip[0])]
+  }
+
+  // Case 2: No intersection - find minimum distance
+  let dist_and_segment: [number, g.Segment][] = []
+
+  // Distance from bezier start to circle
+  dist_and_segment.push(point2circle(bezier.start, circle))
+
+  // Distance from bezier end to circle
+  dist_and_segment.push(point2circle(bezier.end, circle))
+
+  // Check distances from sample points along the bezier curve to circle
+  const sampleCount = 10
+  for (let i = 1; i < sampleCount; i++) {
+    const t = i / sampleCount
+    const point = bezier.pointAtLength(bezier.length * t)
+    dist_and_segment.push(point2circle(point, circle))
+  }
+
+  sort(dist_and_segment)
+  return dist_and_segment[0]
+}
+
+/**
+ * Find closest points between two cubic Bezier curves using algebraic/numerical method
+ * 
+ * Mathematical approach:
+ * Minimize D²(t,u) = ||B₁(t) - B₂(u)||²
+ * Critical points satisfy:
+ *   (B₁(t) - B₂(u)) · B₁'(t) = 0
+ *   (B₁(t) - B₂(u)) · B₂'(u) = 0
+ * 
+ * This system is solved numerically with Newton-Raphson method.
+ * 
+ * @returns [minimum distance, segment connecting closest points]
+ */
+export function bezier2bezier(bezier1: g.Bezier, bezier2: g.Bezier): [number, g.Segment] {
+  // Extract control points
+    const p = [bezier1.start, bezier1.control1, bezier1.control2, bezier1.end]
+    const q = [bezier2.start, bezier2.control1, bezier2.control2, bezier2.end]
+    
+    // Helper: Euclidean distance between points
+    const pointDist = (a: g.Point, b: g.Point): number => 
+      Math.hypot(a.x - b.x, a.y - b.y)
+    
+    // Helper: update minimum if candidate is better
+    let minDist = Infinity
+    let minSeg = new g.Segment()
+    
+    const updateMin = (pt1: g.Point, pt2: g.Point) => {
+      const dist = pointDist(pt1, pt2)
+      if (dist < minDist) {
+        minDist = dist
+        minSeg = new g.Segment(pt1, pt2)
+      }
+    }
+    
+    // Check for intersections (distance = 0)
+
+    try {
+      const intersections = bezier1.intersect(bezier2)
+      if (intersections && intersections.length > 0) {
+        return [0, new g.Segment(intersections[0], intersections[0])]
+      }
+    } catch (e) {
+      // If intersect() not implemented or fails, continue with distance calculation
+    }
+    
+    // Check all control point combinations (quick bounds)
+    
+    for (const pt1 of p) {
+      for (const pt2 of q) {
+        updateMin(pt1, pt2)
+      }
+    }
+    
+    // Check endpoints of curve1 against full curve2 (and vice versa)
+
+    for (const pt of p) {
+      const [dist, seg] = bezierClosestPoint(bezier2, pt)
+      if (dist < minDist) {
+        minDist = dist
+        minSeg = seg.reverse() // seg goes from curve2 to pt, we need pt to curve2
+      }
+    }
+    
+    for (const pt of q) {
+      const [dist, seg] = bezierClosestPoint(bezier1, pt)
+      if (dist < minDist) {
+        minDist = dist
+        minSeg = seg // seg already goes from curve1 to pt
+      }
+    }
+    
+    // Numerical optimization - solve the critical point system
+    // 
+    // We minimize F(t,u) = ||B₁(t) - B₂(u)||²
+    // Critical points: ∂F/∂t = 0 and ∂F/∂u = 0
+    // Which gives:
+    //   f(t,u) = (B₁(t) - B₂(u)) · B₁'(t) = 0
+    //   g(t,u) = (B₁(t) - B₂(u)) · B₂'(u) = 0  (note: sign doesn't matter for root-finding)
+    //
+    // We use Newton-Raphson with grid-search initialization and gradient descent fallback.
+    
+    const newtonSolve = (t0: number, u0: number): [number, number] | null => {
+      let t = t0, u = u0
+      const maxIter = 30
+      const tol = 1e-10
+      const eps = 1e-6
+      
+      for (let iter = 0; iter < maxIter; iter++) {
+        // Evaluate curves and derivatives
+        const B1 = bezierPoint(p[0], p[1], p[2], p[3], t)
+        const B1p = bezierDerivative(p[0], p[1], p[2], p[3], t)
+        const B2 = bezierPoint(q[0], q[1], q[2], q[3], u)
+        const B2p = bezierDerivative(q[0], q[1], q[2], q[3], u)
+        
+        const diff = new g.Vector(B1.x - B2.x, B1.y - B2.y)
+        
+        // System functions
+        const f = diff.dot(B1p)  // (B1-B2)·B1'
+        const f1 = diff.dot(B2p)  // (B1-B2)·B2'
+        
+        // Check convergence
+        if (Math.hypot(f, f1) < tol) {
+          return [Math.max(0, Math.min(1, t)), Math.max(0, Math.min(1, u))]
+        }
+        
+        // Compute second derivatives numerically (central difference)
+        const tPlus = Math.min(1, t + eps), tMinus = Math.max(0, t - eps)
+        const uPlus = Math.min(1, u + eps), uMinus = Math.max(0, u - eps)
+        
+        const B1p_plus = bezierDerivative(p[0], p[1], p[2], p[3], tPlus)
+        const B1p_minus = bezierDerivative(p[0], p[1], p[2], p[3], tMinus)
+        const B2p_plus = bezierDerivative(q[0], q[1], q[2], q[3], uPlus)
+        const B2p_minus = bezierDerivative(q[0], q[1], q[2], q[3], uMinus)
+        
+        const B1pp = new g.Vector(
+          (B1p_plus.x - B1p_minus.x) / (tPlus - tMinus),
+          (B1p_plus.y - B1p_minus.y) / (tPlus - tMinus)
+        )
+        const B2pp = new g.Vector(
+          (B2p_plus.x - B2p_minus.x) / (uPlus - uMinus),
+          (B2p_plus.y - B2p_minus.y) / (uPlus - uMinus)
+        )
+        
+        // Jacobian matrix:
+        // J = [ ∂f/∂t  ∂f/∂u ] = [ B1'·B1' + (B1-B2)·B1''    -B2'·B1' ]
+        //     [ ∂g/∂t  ∂g/∂u ]   [ B1'·B2'                    -B2'·B2' - (B1-B2)·B2'' ]
+        
+        const J11 = B1p.dot(B1p) + diff.dot(B1pp)
+        const J12 = -B2p.dot(B1p)
+        const J21 = B1p.dot(B2p)
+        const J22 = -B2p.dot(B2p) - diff.dot(B2pp)
+        
+        const det = J11 * J22 - J12 * J21
+        
+        if (Math.abs(det) < 1e-12) {
+          // Singular Jacobian: fallback to gradient descent step
+          const step = 0.02
+          t = Math.max(0, Math.min(1, t - step * f))
+          u = Math.max(0, Math.min(1, u - step * f1))
+          continue
+        }
+        
+        // Newton step: solve J * [dt, du]ᵀ = -[f, g]ᵀ
+        const dt = (J12 * f1 - J22 * f) / det
+        const du = (J21 * f - J11 * f1) / det
+        
+        // Check step convergence
+        if (Math.hypot(dt, du) < tol) {
+          t = Math.max(0, Math.min(1, t + dt))
+          u = Math.max(0, Math.min(1, u + du))
+          break
+        }
+        
+        // Update with clamping to [0,1]
+        t = Math.max(0, Math.min(1, t + dt))
+        u = Math.max(0, Math.min(1, u + du))
+      }
+      
+      return [t, u]
+    }
+    
+    // Grid search for initial guesses (5×5 = 25 starting points)
+    const gridSteps = 5
+    for (let i = 0; i <= gridSteps; i++) {
+      for (let j = 0; j <= gridSteps; j++) {
+        const t0 = i / gridSteps
+        const u0 = j / gridSteps
+        
+        const result = newtonSolve(t0, u0)
+        if (result) {
+          const [t, u] = result
+          const pt1 = bezierPoint(p[0], p[1], p[2], p[3], t)
+          const pt2 = bezierPoint(q[0], q[1], q[2], q[3], u)
+          updateMin(pt1, pt2)
+        }
+      }
+    }
+    
+    // Additional sampling as safety net (catches edge cases)
+
+    const sampleCount = 40
+    for (let i = 0; i <= sampleCount; i++) {
+      const t = i / sampleCount
+      const pt1 = bezierPoint(p[0], p[1], p[2], p[3], t)
+      const [dist, seg] = bezierClosestPoint(bezier2, pt1)
+      if (dist < minDist) {
+        minDist = dist
+        minSeg = seg.reverse()
+      }
+    }
+    
+    // Also sample the other direction for symmetry
+    for (let j = 0; j <= sampleCount; j++) {
+      const u = j / sampleCount
+      const pt2 = bezierPoint(q[0], q[1], q[2], q[3], u)
+      const [dist, seg] = bezierClosestPoint(bezier1, pt2)
+      if (dist < minDist) {
+        minDist = dist
+        minSeg = seg
+      }
+    }
+    
+    return [minDist, minSeg]
+}
+
+/**
+ * Find closest point between Bezier curve and a segment using algebraic method
+ */
+export function bezier2segment(bezier: g.Bezier, segment: g.Segment): [number, g.Segment] {
+  // Check if they intersect first
+    const intersections = bezier.intersect(segment)
+    if (intersections.length > 0) {
+      return [0, new g.Segment(intersections[0], intersections[0])]
+    }
+    
+    let minDist = Infinity
+    let minSegment = new g.Segment()
+    
+    // 1. Find closest point on bezier to segment endpoints
+    const [dist1, seg1] = bezierClosestPoint(bezier, segment.start)
+    if (dist1 < minDist) {
+      minDist = dist1
+      minSegment = seg1.reverse()
+    }
+    
+    const [dist2, seg2] = bezierClosestPoint(bezier, segment.end)
+    if (dist2 < minDist) {
+      minDist = dist2
+      minSegment = seg2.reverse()
+    }
+    
+    // 2. Find closest point on segment to bezier endpoints
+    const [dist3, seg3] = segment.distanceTo(bezier.start)
+    if (dist3 < minDist) {
+      minDist = dist3
+      minSegment = seg3
+    }
+    
+    const [dist4, seg4] = segment.distanceTo(bezier.end)
+    if (dist4 < minDist) {
+      minDist = dist4
+      minSegment = seg4
+    }
+    
+    // 3. Sample points along the bezier curve for additional checks
+    const sampleCount = 20
+    for (let i = 1; i < sampleCount; i++) {
+      const t = i / sampleCount
+      const pt = bezierPoint(bezier.start, bezier.control1, bezier.control2, bezier.end, t)
+      const [dist, seg] = segment.distanceTo(pt)
+      if (dist < minDist) {
+        minDist = dist
+        minSegment = seg
+      }
+    }
+    
+    return [minDist, minSegment]
+}
+
+/**
+ * Find closest point between Bezier curve and polygon using algebraic method
+ */
+export function bezier2polygon(bezier: g.Bezier, polygon: g.Polygon): [number, g.Segment] {
+  let minDist = Infinity
+    let minSegment = new g.Segment()
+    
+    for (const edge of polygon.edges) {
+      let dist: number
+      let seg: g.Segment
+      
+      if (edge.isSegment()) {
+        [dist, seg] = bezier2segment(bezier, edge.shape as g.Segment)
+      } else if (edge.isBezier()) {
+        // Bezier to Bezier - use sampling for now
+        [dist, seg] = bezier.distanceTo(edge.shape)
+      } else {
+        // Arc or other shapes
+        [dist, seg] = bezier.distanceTo(edge.shape)
+      }
+      
+      if (dist < minDist) {
+        minDist = dist
+        minSegment = seg
+      }
+    }
+    
+    return [minDist, minSegment]
+}
+
+/**
  * Calculate distance and shortest segment between two arcs
  * @param arc1
  * @param arc2
@@ -436,6 +1124,54 @@ export function point2polygon(point, polygon): [number, g.Segment] {
     }
   }
   return min_dist_and_segment
+}
+
+/**
+ * Calculate distance and shortest segment between point and quadratic
+ */
+export function point2quadratic(point: g.Point, quadratic: g.Quadratic): [number, g.Segment] {
+  // Check if point is on the quadratic curve
+  if (quadratic.contains(point)) {
+    return [0, new g.Segment(point, point)]
+  }
+
+  // Find minimum distance by checking distances to all segments of the quadratic
+  let min_dist = Number.POSITIVE_INFINITY
+  let closest_segment = new g.Segment(point, point)
+
+  for (let segment of quadratic.segments) {
+    let [dist, shortest_segment] = point2segment(point, segment)
+    if (dist < min_dist) {
+      min_dist = dist
+      closest_segment = shortest_segment
+    }
+  }
+
+  return [min_dist, closest_segment]
+}
+
+/**
+ * Calculate distance and shortest segment between point and bezier
+ */
+export function point2bezier(point: g.Point, bezier: g.Bezier): [number, g.Segment] {
+  // Check if point is on the bezier curve
+  if (bezier.contains(point)) {
+    return [0, new g.Segment(point, point)]
+  }
+
+  // Find minimum distance by checking distances to all segments of the bezier
+  let min_dist = Number.POSITIVE_INFINITY
+  let closest_segment = new g.Segment(point, point)
+
+  for (let segment of bezier.segments) {
+    let [dist, shortest_segment] = point2segment(point, segment)
+    if (dist < min_dist) {
+      min_dist = dist
+      closest_segment = shortest_segment
+    }
+  }
+
+  return [min_dist, closest_segment]
 }
 
 export function shape2polygon(shape, polygon): [number, g.Segment] {

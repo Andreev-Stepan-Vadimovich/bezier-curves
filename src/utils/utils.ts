@@ -61,3 +61,10 @@ export function LT(x: number, y: number) {
 export function LE(x: number, y: number) {
   return x - y < DP_TOL
 }
+
+/**
+ * Clamps a value between min and max (inclusive)
+ */
+export function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}

@@ -10,7 +10,6 @@ import * as Distance from '../algorithms/distance'
 import * as BezierAlgebraic from '../algorithms/bezierAlgebraicAlgoritms'
 import * as curves from './curves'
 import { Quadratic } from './Quadratic'
-import { Polygon } from './Polygon'
 
 const EMPTY = Object.freeze([]) as any[]
 
@@ -198,6 +197,10 @@ export class Bezier extends Shape<Bezier> {
 
     if (shape instanceof geom.Bezier) {
       return Distance.bezier2bezier(this, shape)
+    }
+
+    if (shape instanceof geom.Circle) {
+      return Distance.bezier2circle(this, shape)
     }
 
     // Fall back to segment-based approximation for other shapes

@@ -11,6 +11,8 @@ import * as curves from './curves'
 import { Bezier } from './Bezier'
 import { Vector } from './Vector'
 import { Polygon } from './Polygon'
+import { Circle } from './Circle'
+import { quadraticClosestPoint } from '../algorithms/quadraticAlgebraicAlgoritms'
 
 const EMPTY = Object.freeze([]) as any[]
 
@@ -165,6 +167,14 @@ export class Quadratic extends Shape<Quadratic> {
    * @returns {Segment} shortest segment between segment and shape (started at segment, ended at shape)
    */
   distanceTo(shape: Shape): [number, Segment] {
+    if (shape instanceof Point) {
+      const [dist, seg] = quadraticClosestPoint(this, shape)
+      return [dist, seg.reverse()]
+    }
+    if (shape instanceof Segment) return Distance.segment2quadratic(shape, this)
+    if (shape instanceof Circle) return Distance.quadratic2circle(this, shape)
+    if (shape instanceof Quadratic) return Distance.quadratic2quadratic(this, shape)
+
     const distance = getSegmentDistance(shape)
     return this.segments.reduce(
       (result, current) => {
@@ -177,15 +187,15 @@ export class Quadratic extends Shape<Quadratic> {
   }
 
   tangentInStart(): Vector {
-    // Для квадратичной кривой Безье касательный вектор в начальной точке (t=0)
-    // равен производной: B'(0) = 2(control1 - start)
+    // For a quadratic Bezier curve, the tangent vector at the starting point is (t=0)
+    // equal to the derivative: B'(0) = 2(control1 - start)
     let vec = new Vector(this.start, this.control1)
     return vec.normalize()
   }
 
   tangentInEnd(): Vector {
-    // Для квадратичной кривой Безье касательный вектор в конечной точке (t=1)
-    // равен производной: B'(1) = 2(end - control1)
+    // For a quadratic Bezier curve, the tangent vector at the end point is (t=1)
+    // equal to the derivative: B'(1) = 2(end - control1)
     let vec = new Vector(this.control1, this.end)
     return vec.normalize()
   }

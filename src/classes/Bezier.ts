@@ -363,6 +363,40 @@ export class Bezier extends Shape<Bezier> {
     return [dist, seg.reverse()] as [number, Segment]
   }
 
+  definiteIntegral(ymin = 0.0) {
+    // x(t), y(t) в степенном базисе:
+    // p(t) = a*t^3 + b*t^2 + c*t + d, t in [0, 1]
+    const x0 = this.start.x
+    const x1 = this.control1.x
+    const x2 = this.control2.x
+    const x3 = this.end.x
+    const y0 = this.start.y
+    const y1 = this.control1.y
+    const y2 = this.control2.y
+    const y3 = this.end.y
+
+    const ax = -x0 + 3 * x1 - 3 * x2 + x3
+    const bx = 3 * x0 - 6 * x1 + 3 * x2
+    const cx = -3 * x0 + 3 * x1
+
+    const ay = -y0 + 3 * y1 - 3 * y2 + y3
+    const by = 3 * y0 - 6 * y1 + 3 * y2
+    const cy = -3 * y0 + 3 * y1
+    const dy = y0 - ymin
+
+    // Ищем I = integral_0^1 (y(t)-ymin) * x'(t) dt
+    // x'(t) = 3*ax*t^2 + 2*bx*t + cx
+    // (ay t^3 + by t^2 + cy t + dy) * (3ax t^2 + 2bx t + cx)
+    const m5 = ay * (3 * ax)
+    const m4 = ay * (2 * bx) + by * (3 * ax)
+    const m3 = ay * cx + by * (2 * bx) + cy * (3 * ax)
+    const m2 = by * cx + cy * (2 * bx) + dy * (3 * ax)
+    const m1 = cy * cx + dy * (2 * bx)
+    const m0 = dy * cx
+
+    return m5 / 6 + m4 / 5 + m3 / 4 + m2 / 3 + m1 / 2 + m0
+  }
+
   /**
    * Return new segment transformed using affine transformation matrix
    */
